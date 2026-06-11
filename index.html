@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Monologue — Private Room Chat</title>
+<style>
+  :root {
+    /* Van Gogh palette — from Clarion app */
+    --bg:        #e0f2eb;
+    --surface:   #fffcf2;
+    --surface2:  #f5edd6;
+    --border:    #d4b896;
+    --accent:    #2b5fa5;
+    --accent2:   #1a3d6e;
+    --gold:      #e8a820;
+    --gold2:     #c8850a;
+    --teal:      #3a7d6e;
+    --sky:       #5b8fc9;
+    --text:      #2c1f0e;
+    --muted:     #7a6045;
+    --error:     #b83232;
+    --success:   #2d7a3a;
+    --shadow:    0 2px 8px rgba(44,31,14,0.08);
+    --shadow-md: 0 4px 16px rgba(44,31,14,0.12);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    background-image:
+      radial-gradient(ellipse 80% 40% at 10% 20%, rgba(58,125,110,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 80%, rgba(43,95,165,0.07) 0%, transparent 60%);
+  }
+
+  /* ── Screens ── */
+  .screen { display:none; width:100%; height:100vh; }
+  .screen.active { display:flex; }
+
+  /* ════════════════════════════════════════
+     SETUP SCREEN
+  ════════════════════════════════════════ */
+  #screen-setup {
+    align-items: center;
+    justify-content: flex-start;
+    flex-direction: column;
+    padding: calc(20px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  .setup-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 18px;
+    padding: 24px 28px;
+    width: 100%;
+    max-width: 520px;
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+  }
+  .setup-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--accent), var(--teal));
+  }
+  .app-logo { text-align: center; margin-bottom: 16px; }
+  .app-icon {
+    font-size: 32px; display: block; margin-bottom: 6px;
+    animation: sway 4s ease-in-out infinite;
+  }
+  @keyframes sway {
+    0%,100% { transform: rotate(-4deg); }
+    50%      { transform: rotate(4deg); }
+  }
+  .app-title {
+    font-size: 24px; font-weight: 900;
+    color: var(--accent2); letter-spacing: -0.02em;
+  }
+  .app-title em { font-style: normal; color: var(--gold2); }
+  .app-subtitle { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; margin-top: 3px; }
+
+  .setup-section-title {
+    font-size: 12.5px; font-weight: 800; color: var(--accent2); margin-bottom: 4px;
+  }
+  .setup-desc {
+    font-size: 11.5px; color: var(--muted); line-height: 1.6; margin-bottom: 12px;
+  }
+  .setup-desc a { color: var(--accent); }
+  .steps {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 12px;
+    counter-reset: step;
+  }
+  .steps li {
+    list-style: none;
+    padding-left: 24px;
+    position: relative;
+    counter-increment: step;
+    margin-bottom: 2px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    width: 16px; height: 16px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    top: 3px;
+  }
+  .steps a { color: var(--accent); }
+  textarea.cfg-ta {
+    width: 100%;
+    height: 110px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--text);
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.18s, box-shadow 0.18s;
+  }
+  textarea.cfg-ta:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(43,95,165,0.12);
+    background: #fff;
+  }
+  .btn-primary {
+    width: 100%; padding: 13px;
+    background: linear-gradient(135deg, var(--accent), var(--sky));
+    color: white; border: none; border-radius: 10px;
+    font-family: inherit; font-size: 14px; font-weight: 800;
+    cursor: pointer; letter-spacing: 0.04em;
+    box-shadow: 0 3px 10px rgba(43,95,165,0.25);
+    transition: all 0.18s; margin-top: 12px;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(43,95,165,0.35); }
+  .btn-primary:active { transform: none; }
+  .err-box {
+    background: #fdf0f0; border: 1.5px solid #e8b0b0; color: var(--error);
+    border-radius: 8px; padding: 10px 13px; font-size: 12px;
+    margin-top: 10px; display: none;
+  }
+
+  /* ════════════════════════════════════════
+     LOGIN SCREEN
+  ════════════════════════════════════════ */
+  #screen-login {
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+  }
+  .login-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 18px;
+    padding: 36px 32px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+  }
+  .login-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--sky), var(--gold));
+  }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 10.5px; font-weight: 800;
+    color: var(--muted); letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 7px;
+  }
+  .field input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    color: var(--text); font-size: 15px;
+    font-family: inherit; padding: 12px 14px;
+    border-radius: 10px; outline: none;
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+  }
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(43,95,165,0.12);
+    background: #fff;
+  }
+  .field input::placeholder { color: #b8a88a; }
+  .pin-wrap { position: relative; }
+  .pin-wrap input { padding-right: 40px; letter-spacing: 0.2em; font-size: 18px; }
+  .pin-toggle {
+    position: absolute; right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    font-size: 16px; color: var(--muted);
+    padding: 4px; line-height: 1;
+  }
+  .login-hint {
+    text-align: center; font-size: 11px; color: var(--muted);
+    margin-top: 16px; line-height: 1.8;
+  }
+  .reset-link { color: var(--muted); font-size: 10px; cursor: pointer; }
+  .reset-link:hover { color: var(--accent); }
+
+  /* ════════════════════════════════════════
+     CHAT SCREEN
+  ════════════════════════════════════════ */
+  #screen-chat { flex-direction: column; }
+
+  /* Header */
+  .chat-header {
+    background: var(--surface);
+    border-bottom: 1.5px solid var(--border);
+    padding: calc(11px + env(safe-area-inset-top)) 18px 11px;
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(44,31,14,0.06);
+  }
+  .chat-header-icon { font-size: 22px; }
+  .chat-header-info { flex: 1; min-width: 0; }
+  .chat-header-title {
+    font-size: 15px; font-weight: 900; color: var(--accent2); letter-spacing: 0.04em;
+  }
+  .chat-header-sub {
+    font-size: 11px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .room-badge {
+    background: #eaf2ff; border: 1px solid #b3cff0;
+    color: var(--accent); font-size: 10.5px; font-weight: 700;
+    padding: 4px 12px; border-radius: 100px;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--success); animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(45,122,58,.4); }
+    50%      { box-shadow: 0 0 0 4px rgba(45,122,58,0); }
+  }
+  .btn-leave {
+    background: var(--surface2); border: 1.5px solid var(--border);
+    color: var(--muted); padding: 7px 14px; border-radius: 8px;
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-leave:hover { color: var(--error); border-color: #e8b0b0; background: #fdf0f0; }
+
+  /* Message list */
+  .msg-list {
+    flex: 1; overflow-y: auto;
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .msg-list::-webkit-scrollbar { width: 6px; }
+  .msg-list::-webkit-scrollbar-track { background: transparent; }
+  .msg-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--muted); text-align: center; gap: 8px;
+    pointer-events: none;
+  }
+  .empty-icon { font-size: 44px; opacity: 0.35; }
+  .empty-title { font-size: 14px; font-weight: 700; }
+  .empty-hint { font-size: 11.5px; opacity: 0.8; }
+
+  /* System message */
+  .sys-msg {
+    text-align: center; font-size: 11px; color: var(--muted);
+    padding: 5px 0; font-style: italic;
+  }
+
+  /* Message bubble */
+  .msg {
+    display: flex; flex-direction: column;
+    max-width: 70%;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity:0; transform: translateY(5px); }
+    to   { opacity:1; transform: none; }
+  }
+  .msg.mine   { align-self: flex-end;   align-items: flex-end; }
+  .msg.theirs { align-self: flex-start; align-items: flex-start; }
+
+  .msg-meta {
+    font-size: 10px; color: var(--muted); margin-bottom: 3px; font-weight: 600;
+  }
+
+  .msg-bubble {
+    border-radius: 16px; padding: 9px 14px;
+    font-size: 13.5px; line-height: 1.55; word-break: break-word;
+  }
+  .msg.mine .msg-bubble {
+    background: linear-gradient(135deg, var(--accent), var(--sky));
+    color: white; border-bottom-right-radius: 4px;
+  }
+  .msg.theirs .msg-bubble {
+    background: var(--surface); border: 1.5px solid var(--border);
+    color: var(--text); border-bottom-left-radius: 4px;
+  }
+
+  .msg-del-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 10px; color: var(--muted); margin-top: 2px;
+    padding: 0; opacity: 0; transition: opacity 0.15s;
+  }
+  .msg:hover .msg-del-btn { opacity: 1; }
+  .msg-del-btn:hover { color: var(--error); }
+
+  /* Image message */
+  .msg-img-wrap {
+    position: relative; border-radius: 12px; overflow: hidden;
+    max-width: 300px; cursor: pointer;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+  }
+  .msg.mine .msg-img-wrap { border-color: rgba(91,143,201,0.4); }
+  .msg-img-wrap img {
+    display: block; max-width: 100%; max-height: 260px;
+    object-fit: contain;
+  }
+  .img-toolbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 100%);
+    padding: 8px 8px;
+    display: flex; gap: 6px;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .msg-img-wrap:hover .img-toolbar { opacity: 1; }
+  .img-btn {
+    background: rgba(255,255,255,0.92); border: none;
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 11px; font-weight: 700; cursor: pointer;
+    transition: background 0.15s; color: var(--text);
+  }
+  .img-btn:hover { background: white; }
+  .img-btn.del:hover { color: var(--error); }
+
+  /* Input area */
+  .chat-input-area {
+    background: var(--surface);
+    border-top: 1.5px solid var(--border);
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom));
+    flex-shrink: 0;
+  }
+  .upload-bar {
+    background: #eaf2ff; border: 1px solid #b3cff0;
+    border-radius: 8px; padding: 7px 12px;
+    font-size: 11.5px; color: var(--accent2);
+    margin-bottom: 9px;
+    display: none; align-items: center; gap: 10px;
+  }
+  .upload-bar.show { display: flex; }
+  .progress-track {
+    flex: 1; height: 4px; background: #c8d8f0;
+    border-radius: 2px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent);
+    border-radius: 2px; width: 0%; transition: width 0.2s;
+  }
+  .input-row {
+    display: flex; gap: 8px; align-items: flex-end;
+  }
+  .chat-textarea {
+    flex: 1; background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 10px 14px;
+    font-family: inherit; font-size: 14px; color: var(--text);
+    outline: none; resize: none;
+    min-height: 42px; max-height: 120px; line-height: 1.5;
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    overflow-y: auto;
+  }
+  .chat-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(43,95,165,0.1);
+    background: #fff;
+  }
+  .chat-textarea::placeholder { color: #b8a88a; }
+  .icon-btn {
+    width: 42px; height: 42px; flex-shrink: 0;
+    background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: 10px; cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover {
+    background: var(--gold); border-color: var(--gold2);
+    transform: translateY(-1px);
+  }
+  .btn-send {
+    width: 42px; height: 42px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--sky));
+    border: none; border-radius: 10px; cursor: pointer;
+    color: white; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    box-shadow: 0 2px 8px rgba(43,95,165,0.2);
+  }
+  .btn-send:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(43,95,165,0.35); }
+  .btn-send:active { transform: none; }
+
+  /* Lightbox */
+  .lightbox {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.88);
+    display: none; align-items: center; justify-content: center;
+    z-index: 1000;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img {
+    max-width: 95vw; max-height: 92vh;
+    border-radius: 8px; object-fit: contain;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  }
+  .lb-close {
+    position: absolute; top: 16px; right: 20px;
+    color: white; font-size: 30px; cursor: pointer;
+    opacity: 0.75; line-height: 1; transition: opacity 0.15s;
+  }
+  .lb-close:hover { opacity: 1; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 80px; left: 50%;
+    transform: translateX(-50%) translateY(16px);
+    background: var(--teal); color: white;
+    padding: 9px 20px; border-radius: 8px;
+    font-size: 13px; font-weight: 700;
+    opacity: 0; transition: all 0.25s;
+    pointer-events: none; z-index: 999;
+    box-shadow: 0 4px 12px rgba(58,125,110,0.3);
+    white-space: nowrap;
+  }
+  .toast.err { background: var(--error); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Clear-room modal ── */
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center;
+    z-index: 1001; padding: 24px;
+  }
+  .modal.open { display: flex; }
+  .modal-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 16px; padding: 28px 26px;
+    width: 100%; max-width: 360px;
+    box-shadow: var(--shadow-md);
+    position: relative; overflow: hidden;
+  }
+  .modal-card::before {
+    content: ''; position: absolute; top:0; left:0; right:0; height:3px;
+    background: linear-gradient(90deg, var(--error), #e07070);
+  }
+  .modal-title {
+    font-size: 15px; font-weight: 900; color: var(--error); margin-bottom: 6px;
+  }
+  .modal-desc {
+    font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 16px;
+  }
+  .modal-desc strong { color: var(--text); }
+  .modal-card input {
+    width: 100%; background: var(--surface2);
+    border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 11px 14px; font-family: inherit; font-size: 15px;
+    color: var(--text); outline: none; letter-spacing: 0.15em;
+    transition: border-color 0.18s;
+  }
+  .modal-card input:focus { border-color: var(--error); box-shadow: 0 0 0 3px rgba(184,50,50,0.1); }
+  .modal-err {
+    font-size: 11.5px; color: var(--error); margin-top: 8px; min-height: 16px;
+  }
+  .modal-btns {
+    display: flex; gap: 8px; margin-top: 18px;
+  }
+  .modal-btns button {
+    flex: 1; padding: 11px; border-radius: 9px;
+    font-family: inherit; font-size: 13px; font-weight: 700;
+    cursor: pointer; border: 1.5px solid var(--border);
+    background: var(--surface2); color: var(--muted); transition: all 0.15s;
+  }
+  .modal-btns button:hover { color: var(--text); }
+  .modal-btns .btn-danger {
+    background: var(--error); color: white; border-color: var(--error);
+  }
+  .modal-btns .btn-danger:hover { background: #9e2020; border-color: #9e2020; }
+  .btn-clear {
+    background: none; border: none; cursor: pointer;
+    font-size: 16px; color: var(--muted); padding: 6px 8px;
+    border-radius: 8px; transition: all 0.15s; line-height: 1;
+  }
+  .btn-clear:hover { background: #fdf0f0; color: var(--error); }
+
+  @media (max-width: 520px) {
+    .msg { max-width: 88%; }
+    .login-card, .setup-card { padding: 24px 18px; }
+    .chat-header { padding: 10px 12px; gap: 8px; }
+    .room-badge { display: none; }
+  }
+
+  /* iPhone status-bar clearance — works on all models (notch, Dynamic Island, or plain status bar) */
+  @media (max-width: 768px) {
+    .chat-header {
+      padding-top: max(calc(env(safe-area-inset-top, 0px) + 16px), 52px);
+      padding-bottom: 12px;
+    }
+    #screen-setup {
+      padding-top: max(calc(env(safe-area-inset-top, 0px) + 20px), 56px);
+    }
+    #screen-login {
+      padding-top: max(calc(env(safe-area-inset-top, 0px) + 24px), 56px);
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     SETUP SCREEN — first-time Firebase config
+════════════════════════════════════════ -->
+<div class="screen" id="screen-setup">
+  <div class="setup-card">
+    <div class="app-logo">
+      <span class="app-icon">🎨</span>
+      <div class="app-title">MONO<em>LOGUE</em></div>
+      <div class="app-subtitle">PRIVATE ROOM CHAT</div>
+    </div>
+
+    <div class="setup-section-title">First-Time Setup — Firebase Config</div>
+    <div class="setup-desc">
+      Monologue uses a free Google Firebase backend for real-time messaging and image storage.
+      This is a one-time step — once saved, you won't need to do this again on this browser.
+    </div>
+
+    <ol class="steps">
+      <li>Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> → Create a project (free)</li>
+      <li>In the left menu: <strong>Build → Realtime Database</strong> → Create database → Start in <em>test mode</em></li>
+      <li><strong>Project Settings</strong> (gear icon) → Web app (&lt;/&gt;) → Register app → copy the config object</li>
+      <li>Paste the config below and click Save</li>
+    </ol>
+
+    <textarea class="cfg-ta" id="cfg-input" placeholder='Paste the entire SDK snippet from Firebase here — or just the firebaseConfig object. Example:
+
+const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "your-project.firebaseapp.com",
+  databaseURL: "https://your-project-default-rtdb...",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123...:web:abc..."
+};'></textarea>
+
+    <div style="margin-top:10px;">
+      <label style="display:block;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">
+        Admin PIN <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional — clear any room from any device)</span>
+      </label>
+      <input type="password" id="admin-pin-input" placeholder="Set a secret admin PIN"
+             style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:9px 12px;font-family:inherit;font-size:14px;color:var(--text);outline:none;letter-spacing:0.15em;">
+    </div>
+    <div class="err-box" id="setup-error"></div>
+    <button class="btn-primary" onclick="saveConfig()">Save Config & Continue →</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     LOGIN SCREEN
+════════════════════════════════════════ -->
+<div class="screen" id="screen-login">
+  <div class="login-card">
+    <div class="app-logo">
+      <span class="app-icon">🎨</span>
+      <div class="app-title">MONO<em>LOGUE</em></div>
+      <div class="app-subtitle">PRIVATE ROOM CHAT</div>
+    </div>
+
+    <div class="field">
+      <label>Your Name</label>
+      <input type="text" id="inp-name" placeholder="e.g. Alice" maxlength="24"
+             autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('inp-pin').focus()">
+    </div>
+
+    <div class="field">
+      <label>Room PIN</label>
+      <div class="pin-wrap">
+        <input type="password" id="inp-pin" placeholder="••••••" maxlength="12"
+               autocomplete="off" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'')"
+               onkeydown="if(event.key==='Enter')joinRoom()">
+        <button class="pin-toggle" onclick="togglePin()" title="Show/hide PIN">👁</button>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="joinRoom()">Join Room →</button>
+    <div class="err-box" id="login-error"></div>
+
+    <div class="login-hint">
+      Share the same PIN with the other person.<br>
+      No account needed — completely private.
+      <br><br>
+      <a class="reset-link" onclick="resetConfig()">Reset Firebase config</a>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     CHAT SCREEN
+════════════════════════════════════════ -->
+<div class="screen" id="screen-chat">
+
+  <!-- Header -->
+  <div class="chat-header">
+    <div class="chat-header-icon">🎨</div>
+    <div class="chat-header-info">
+      <div class="chat-header-title">MONOLOGUE</div>
+      <div class="chat-header-sub" id="chat-sub">Room ••••</div>
+    </div>
+    <div class="room-badge">
+      <div class="live-dot"></div>
+      <span id="badge-label">LIVE</span>
+    </div>
+    <button class="btn-clear" onclick="promptClearRoom()" title="Clear all messages in this room">🗑</button>
+    <button class="btn-leave" onclick="leaveRoom()">Leave</button>
+  </div>
+
+  <!-- Messages -->
+  <div class="msg-list" id="msg-list">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">💬</div>
+      <div class="empty-title">No messages yet</div>
+      <div class="empty-hint">Type a message below, or Ctrl+V to paste a screenshot</div>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="chat-input-area">
+    <div class="upload-bar" id="upload-bar">
+      <span>Uploading…</span>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <span id="progress-pct">0%</span>
+    </div>
+    <div class="input-row">
+      <textarea class="chat-textarea" id="chat-input" rows="1"
+        placeholder="Type a message… (Shift+Enter for new line, Ctrl+V to paste image)"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <label class="icon-btn" title="Upload image">
+        📎
+        <input type="file" id="file-input" accept="image/*"
+               style="display:none" onchange="handleFileInput(event)">
+      </label>
+      <button class="btn-send" onclick="sendText()" title="Send (Enter)">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear Room Modal -->
+<div class="modal" id="clear-modal">
+  <div class="modal-card">
+    <div class="modal-title">🗑 Clear Room</div>
+    <div class="modal-desc">
+      Enter your admin PIN to permanently delete <strong>all messages</strong> in Room <strong id="clear-room-pin"></strong>.<br>
+      This cannot be undone.
+    </div>
+    <input type="password" id="clear-pin-inp" placeholder="Admin PIN"
+           maxlength="20" onkeydown="if(event.key==='Enter')confirmClear()">
+    <div class="modal-err" id="clear-err"></div>
+    <div class="modal-btns">
+      <button onclick="closeClearModal()">Cancel</button>
+      <button class="btn-danger" onclick="confirmClear()">Delete All Messages</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <div class="lb-close" onclick="closeLightbox()">✕</div>
+  <img id="lb-img" src="" alt="Image">
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// ── State ───────────────────────────────────────────────────────────────────
+let db, roomRef, roomPin, myName;
+const SID = localStorage.getItem('mono_sid') || crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+localStorage.setItem('mono_sid', SID);
+
+// ── Screen helpers ──────────────────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+// ── Firebase config ─────────────────────────────────────────────────────────
+function initFirebase(cfg) {
+  if (firebase.apps.length) firebase.apps.forEach(a => a.delete());
+  const app = firebase.initializeApp(cfg);
+  db = firebase.database(app);
+}
+
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem('monologue_cfg')); } catch { return null; }
+}
+
+function saveConfig() {
+  const raw = document.getElementById('cfg-input').value.trim();
+  const errEl = document.getElementById('setup-error');
+  errEl.style.display = 'none';
+  try {
+    // Find the block that contains apiKey (handles full SDK paste or just the object)
+    const match = raw.match(/\{[^{}]*apiKey[^{}]*\}/);
+    if (!match) throw new Error('Could not find Firebase config — make sure the pasted text contains the apiKey field');
+
+    // Convert JS object syntax (unquoted keys) to valid JSON
+    let jsonStr = match[0]
+      .replace(/^\s*\/\/.*$/mg, '')              // strip // comments
+      .replace(/,\s*([\]}])/g, '$1')             // remove trailing commas
+      .replace(/([{,]\s*)([A-Za-z_]\w*)\s*:/g, '$1"$2":'); // quote bare keys
+
+    const cfg = JSON.parse(jsonStr);
+    if (!cfg.apiKey)      throw new Error('Missing apiKey in config');
+    if (!cfg.databaseURL) throw new Error('Missing databaseURL — make sure Realtime Database is enabled in Firebase console');
+    initFirebase(cfg);
+    localStorage.setItem('monologue_cfg', JSON.stringify(cfg));
+    const adminPin = document.getElementById('admin-pin-input').value.trim();
+    if (adminPin) localStorage.setItem('monologue_admin', adminPin);
+    show('login');
+    setTimeout(() => document.getElementById('inp-name').focus(), 100);
+  } catch(e) {
+    errEl.textContent = '⚠ ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function resetConfig() {
+  if (!confirm('Reset Firebase config? You will need to paste it again on this browser.')) return;
+  localStorage.removeItem('monologue_cfg');
+  show('setup');
+}
+
+// ── PIN toggle ───────────────────────────────────────────────────────────────
+function togglePin() {
+  const inp = document.getElementById('inp-pin');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ── Join / Leave room ────────────────────────────────────────────────────────
+function joinRoom() {
+  const name = document.getElementById('inp-name').value.trim();
+  const pin  = document.getElementById('inp-pin').value.trim();
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  if (!name) { errEl.textContent = 'Please enter your name.'; errEl.style.display = 'block'; return; }
+  if (pin.length < 4) { errEl.textContent = 'PIN must be at least 4 digits.'; errEl.style.display = 'block'; return; }
+
+  myName  = name;
+  roomPin = pin;
+  roomRef = db.ref('rooms/' + pin + '/messages');
+
+  document.getElementById('badge-label').textContent = 'LIVE';
+  document.getElementById('chat-sub').textContent    = 'Room ••••' + pin.slice(-2) + ' · Chatting as ' + name;
+
+  show('chat');
+  startListening();
+  setTimeout(() => document.getElementById('chat-input').focus(), 100);
+
+  sendSystem(name + ' joined');
+}
+
+
+function leaveRoom() {
+  sendSystem(myName + ' left');
+  // Detach listeners after a brief delay so the system msg goes through
+  setTimeout(() => {
+    if (roomRef) { roomRef.off(); }
+    clearMsgList();
+    show('login');
+    roomRef = null; roomPin = null;
+  }, 250);
+}
+
+// ── Message listener ─────────────────────────────────────────────────────────
+function startListening() {
+  clearMsgList();
+  if (!roomRef) return;
+
+  roomRef.limitToLast(100).on('child_added', snap => {
+    removeEmptyState();
+    renderMsg(snap.val(), snap.key);
+  });
+
+  roomRef.on('child_removed', snap => {
+    const el = document.querySelector('[data-key="' + snap.key + '"]');
+    if (el) { el.style.opacity = '0'; el.style.transition = 'opacity 0.2s'; setTimeout(() => el.remove(), 200); }
+  });
+}
+
+// ── Render messages ───────────────────────────────────────────────────────────
+function renderMsg(data, key) {
+  const list = document.getElementById('msg-list');
+  const isMe = data.sid === SID;
+
+  if (data.type === 'system') {
+    const el = document.createElement('div');
+    el.className = 'sys-msg'; el.setAttribute('data-key', key);
+    el.textContent = '— ' + data.text + ' —';
+    list.appendChild(el); scrollBottom(); return;
+  }
+
+  const time    = new Date(data.ts);
+  const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (isMe ? 'mine' : 'theirs');
+  wrap.setAttribute('data-key', key);
+
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  meta.textContent = (isMe ? 'You' : data.name) + ' · ' + timeStr;
+  wrap.appendChild(meta);
+
+  if (data.type === 'image') {
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'msg-img-wrap';
+
+    const img = document.createElement('img');
+    img.src = data.imageUrl; img.alt = 'Image';
+    img.onclick = () => openLightbox(data.imageUrl);
+    img.onerror = () => { img.alt = '⚠ Image unavailable'; };
+    imgWrap.appendChild(img);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'img-toolbar';
+
+    const dlBtn = document.createElement('button');
+    dlBtn.className = 'img-btn'; dlBtn.textContent = '⬇ Download';
+    dlBtn.onclick = e => { e.stopPropagation(); downloadImg(data.imageUrl); };
+    toolbar.appendChild(dlBtn);
+
+    if (isMe) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'img-btn del'; delBtn.textContent = '✕ Delete';
+      delBtn.onclick = e => { e.stopPropagation(); deleteMsg(key); };
+      toolbar.appendChild(delBtn);
+    }
+
+    imgWrap.appendChild(toolbar);
+    wrap.appendChild(imgWrap);
+
+  } else {
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble'; bubble.textContent = data.text;
+    wrap.appendChild(bubble);
+
+    if (isMe) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'msg-del-btn'; delBtn.textContent = '✕ delete';
+      delBtn.onclick = () => deleteMsg(key, null);
+      wrap.appendChild(delBtn);
+    }
+  }
+
+  list.appendChild(wrap);
+  scrollBottom();
+}
+
+// ── Send messages ─────────────────────────────────────────────────────────────
+function sendText() {
+  const inp  = document.getElementById('chat-input');
+  const text = inp.value.trim();
+  if (!text || !roomRef) return;
+  roomRef.push({ type: 'text', name: myName, sid: SID, text, ts: Date.now() });
+  inp.value = ''; inp.style.height = '';
+}
+
+function sendSystem(text) {
+  if (!roomRef) return;
+  roomRef.push({ type: 'system', text, ts: Date.now() });
+}
+
+// ── Upload & send image (Base64 — no Storage needed) ─────────────────────────
+function handleFileInput(e) {
+  const file = e.target.files[0];
+  if (file) uploadAndSend(file);
+  e.target.value = '';
+}
+
+document.addEventListener('paste', e => {
+  if (!roomPin) return;
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      uploadAndSend(item.getAsFile()); break;
+    }
+  }
+});
+
+function uploadAndSend(file) {
+  if (!roomRef) return;
+  const bar   = document.getElementById('upload-bar');
+  const fill  = document.getElementById('progress-fill');
+  const pctEl = document.getElementById('progress-pct');
+  bar.classList.add('show');
+  fill.style.width = '40%';
+  pctEl.textContent = 'Reading…';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    fill.style.width = '80%';
+    pctEl.textContent = 'Sending…';
+    roomRef.push({
+      type: 'image', name: myName, sid: SID,
+      imageUrl: e.target.result,
+      ts: Date.now()
+    }).then(() => {
+      bar.classList.remove('show');
+      fill.style.width = '0%';
+    }).catch(err => {
+      bar.classList.remove('show');
+      showToast('Send failed: ' + err.message, true);
+    });
+  };
+  reader.onerror = () => {
+    bar.classList.remove('show');
+    showToast('Could not read image file', true);
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Delete message ────────────────────────────────────────────────────────────
+function deleteMsg(key) {
+  if (!confirm('Delete this message for everyone?')) return;
+  roomRef.child(key).remove().catch(() => {});
+}
+
+// ── Download image ────────────────────────────────────────────────────────────
+function downloadImg(dataUrl) {
+  const a = Object.assign(document.createElement('a'), {
+    href: dataUrl,
+    download: 'monologue_' + Date.now() + '.png'
+  });
+  a.click();
+  showToast('Downloaded!');
+}
+
+// ── Clear room (admin) ────────────────────────────────────────────────────────
+function promptClearRoom() {
+  const adminPin = localStorage.getItem('monologue_admin');
+  if (!adminPin) {
+    showToast('No admin PIN set — reset config to add one', true);
+    return;
+  }
+  document.getElementById('clear-room-pin').textContent = roomPin;
+  document.getElementById('clear-pin-inp').value = '';
+  document.getElementById('clear-err').textContent = '';
+  document.getElementById('clear-modal').classList.add('open');
+  setTimeout(() => document.getElementById('clear-pin-inp').focus(), 100);
+}
+
+function closeClearModal() {
+  document.getElementById('clear-modal').classList.remove('open');
+}
+
+function confirmClear() {
+  const entered  = document.getElementById('clear-pin-inp').value;
+  const adminPin = localStorage.getItem('monologue_admin');
+  if (entered !== adminPin) {
+    document.getElementById('clear-err').textContent = '⚠ Wrong PIN — try again';
+    document.getElementById('clear-pin-inp').select();
+    return;
+  }
+  closeClearModal();
+  roomRef.remove()
+    .then(() => showToast('Room cleared — all messages deleted'))
+    .catch(err => showToast('Error: ' + err.message, true));
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function openLightbox(url) {
+  document.getElementById('lb-img').src = url;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox(e) {
+  if (e && e.target === document.getElementById('lb-img')) return;
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lb-img').src = '';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+function clearMsgList() {
+  document.getElementById('msg-list').innerHTML =
+    '<div class="empty-state" id="empty-state">' +
+    '<div class="empty-icon">💬</div>' +
+    '<div class="empty-title">No messages yet</div>' +
+    '<div class="empty-hint">Type a message below, or Ctrl+V to paste a screenshot</div>' +
+    '</div>';
+}
+function removeEmptyState() {
+  const e = document.getElementById('empty-state');
+  if (e) e.remove();
+}
+function scrollBottom() {
+  const list = document.getElementById('msg-list');
+  list.scrollTop = list.scrollHeight;
+}
+function showToast(msg, isErr = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isErr ? ' err' : '') + ' show';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(function boot() {
+  const cfg = loadConfig();
+  if (cfg) {
+    try { initFirebase(cfg); show('login'); } catch { show('setup'); }
+  } else {
+    show('setup');
+  }
+})();
+</script>
+</body>
+</html>
