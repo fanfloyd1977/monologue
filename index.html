@@ -336,6 +336,23 @@
     padding: 0; opacity: 0; transition: opacity 0.15s;
   }
   .msg:hover .msg-del-btn { opacity: 1; }
+
+  /* Copy button (top-right of text bubble) */
+  .msg-bubble { position: relative; padding-right: 34px; }
+  .msg-copy-btn {
+    position: absolute; top: 5px; right: 6px;
+    width: 22px; height: 22px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 6px; cursor: pointer;
+    opacity: 0; transition: opacity 0.15s, background 0.15s;
+  }
+  .msg.mine .msg-copy-btn   { background: rgba(255,255,255,0.18); color: white; }
+  .msg.theirs .msg-copy-btn { background: rgba(0,0,0,0.06); color: var(--muted); }
+  .msg-copy-btn:hover       { background: rgba(255,255,255,0.32); }
+  .msg.theirs .msg-copy-btn:hover { background: rgba(0,0,0,0.12); }
+  .msg:hover .msg-copy-btn, .msg-copy-btn.copied { opacity: 1; }
+  .msg-copy-btn svg { width: 13px; height: 13px; }
+  @media (hover: none) { .msg-copy-btn { opacity: 0.6; } }
   .msg-del-btn:hover { color: var(--error); }
 
   /* Image message */
@@ -838,6 +855,27 @@ function startListening() {
   });
 }
 
+// ── Copy message ─────────────────────────────────────────────────────────────
+const COPY_ICON  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+function copyText(text, btn) {
+  const done = () => {
+    btn.innerHTML = CHECK_ICON; btn.classList.add('copied'); btn.title = 'Copied!';
+    setTimeout(() => { btn.innerHTML = COPY_ICON; btn.classList.remove('copied'); btn.title = 'Copy message'; }, 1200);
+  };
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (_) {}
+    ta.remove();
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done, fallback);
+  } else { fallback(); }
+}
+
 // ── Render messages ───────────────────────────────────────────────────────────
 function renderMsg(data, key) {
   const list = document.getElementById('msg-list');
@@ -898,6 +936,13 @@ function renderMsg(data, key) {
       bubble.appendChild(document.createTextNode(line));
       if (i < lines.length - 1) bubble.appendChild(document.createElement('br'));
     });
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'msg-copy-btn'; copyBtn.title = 'Copy message';
+    copyBtn.innerHTML = COPY_ICON;
+    copyBtn.onclick = e => { e.stopPropagation(); copyText(String(data.text), copyBtn); };
+    bubble.appendChild(copyBtn);
+
     wrap.appendChild(bubble);
 
     if (isMe) {
