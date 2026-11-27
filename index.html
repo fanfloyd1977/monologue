@@ -724,7 +724,7 @@ const firebaseConfig = {
       <textarea class="chat-textarea" id="chat-input" rows="1"
         placeholder="Type a message… (Shift+Enter for new line, Ctrl+V to paste image)"
         onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <label class="icon-btn" title="Send image or file (max 15 MB)">
+      <label class="icon-btn" title="Send image or file (max 30 MB)">
         📎
         <input type="file" id="file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip,.rdl,.sql,.mp4,video/mp4"
                style="display:none" onchange="handleFileInput(event)">
@@ -1043,7 +1043,7 @@ function handleFileInput(e) {
 // ── Send file (PDF, Office, txt, zip) ─────────────────────────────────────────
 // File data lives at rooms/{PIN}/files/{key}, message at rooms/{PIN}/messages/{key}.
 // Both are written and deleted together in ONE atomic update — never one without the other.
-const FILE_MAX_BYTES = 15 * 1024 * 1024;
+const FILE_MAX_BYTES = 30 * 1024 * 1024;
 const FILE_ALLOWED   = ['pdf','doc','docx','xls','xlsx','csv','ppt','pptx','txt','zip','rdl','sql','mp4'];
 const CHUNK_CHARS    = 1000000;   // ~1 MB per piece; multiple of 4 so Base64 pieces join cleanly
 
