@@ -724,9 +724,9 @@ const firebaseConfig = {
       <textarea class="chat-textarea" id="chat-input" rows="1"
         placeholder="Type a message… (Shift+Enter for new line, Ctrl+V to paste image)"
         onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <label class="icon-btn" title="Send image or file (max 5 MB)">
+      <label class="icon-btn" title="Send image or file (max 15 MB)">
         📎
-        <input type="file" id="file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip,.rdl,.sql"
+        <input type="file" id="file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip,.rdl,.sql,.mp4,video/mp4"
                style="display:none" onchange="handleFileInput(event)">
       </label>
       <button class="btn-send" onclick="sendText()" title="Send (Enter)">➤</button>
@@ -849,6 +849,7 @@ function joinRoom() {
 
   show('chat');
   startListening();
+  sweepOrphanFiles();
   setTimeout(() => document.getElementById('chat-input').focus(), 100);
 
   sendSystem(name + ' joined');
@@ -1042,8 +1043,9 @@ function handleFileInput(e) {
 // ── Send file (PDF, Office, txt, zip) ─────────────────────────────────────────
 // File data lives at rooms/{PIN}/files/{key}, message at rooms/{PIN}/messages/{key}.
 // Both are written and deleted together in ONE atomic update — never one without the other.
-const FILE_MAX_BYTES = 5 * 1024 * 1024;
-const FILE_ALLOWED   = ['pdf','doc','docx','xls','xlsx','csv','ppt','pptx','txt','zip','rdl','sql'];
+const FILE_MAX_BYTES = 15 * 1024 * 1024;
+const FILE_ALLOWED   = ['pdf','doc','docx','xls','xlsx','csv','ppt','pptx','txt','zip','rdl','sql','mp4'];
+const CHUNK_CHARS    = 1000000;   // ~1 MB per piece; multiple of 4 so Base64 pieces join cleanly
 
 function fileExt(name) { const m = /\.([^.]+)$/.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
 function fmtSize(b) { return b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
@@ -1055,41 +1057,95 @@ function uploadFile(file) {
     showToast('File type not allowed. Use: ' + FILE_ALLOWED.join(', '), true); return;
   }
   if (file.size > FILE_MAX_BYTES) {
-    showToast('File too big (' + fmtSize(file.size) + ') — max 5 MB', true); return;
+    showToast('File too big (' + fmtSize(file.size) + ') — max ' + fmtSize(FILE_MAX_BYTES), true); return;
   }
   const bar   = document.getElementById('upload-bar');
   const fill  = document.getElementById('progress-fill');
   const pctEl = document.getElementById('progress-pct');
-  bar.classList.add('show'); fill.style.width = '40%'; pctEl.textContent = 'Reading…';
+  bar.classList.add('show'); fill.style.width = '5%'; pctEl.textContent = 'Reading…';
 
   const reader = new FileReader();
-  reader.onload = e => {
-    fill.style.width = '80%'; pctEl.textContent = 'Sending…';
-    const key = roomRef.push().key;
-    const updates = {};
-    updates['messages/' + key] = {
-      type: 'file', name: myName, sid: SID,
-      fileName: file.name, fileSize: file.size, ts: Date.now()
-    };
-    updates['files/' + key] = { data: e.target.result };
-    db.ref('rooms/' + roomPin).update(updates).then(() => {
+  reader.onload = async e => {
+    const room = db.ref('rooms/' + roomPin);
+    const key  = roomRef.push().key;
+    const dataUrl = e.target.result;
+    const comma = dataUrl.indexOf(',');
+    const mime  = (/data:([^;]+)/.exec(dataUrl.slice(0, comma)) || [])[1] || 'application/octet-stream';
+    const b64   = dataUrl.slice(comma + 1);
+    const total = Math.max(1, Math.ceil(b64.length / CHUNK_CHARS));
+    try {
+      // 1) Mark the file in the index FIRST — lets the cleanup sweep find it if the upload dies midway
+      await room.child('fileIndex/' + key).set(true);
+      // 2) Upload pieces one by one (keeps every write small)
+      for (let i = 0; i < total; i++) {
+        await room.child('files/' + key + '/c/' + i).set(b64.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS));
+        const pct = Math.round(((i + 1) / total) * 100);
+        fill.style.width = pct + '%'; pctEl.textContent = 'Sending… ' + pct + '%';
+      }
+      // 3) Only when every piece is up: show the message (atomic with file info)
+      const updates = {};
+      updates['files/' + key + '/mime'] = mime;
+      updates['files/' + key + '/n']    = total;
+      updates['messages/' + key] = {
+        type: 'file', name: myName, sid: SID,
+        fileName: file.name, fileSize: file.size, ts: Date.now()
+      };
+      await room.update(updates);
       bar.classList.remove('show'); fill.style.width = '0%';
-    }).catch(err => {
+    } catch (err) {
+      // Upload failed — remove any pieces already saved, so nothing is left on the server
+      const clean = {};
+      clean['files/' + key] = null; clean['fileIndex/' + key] = null;
+      room.update(clean).catch(() => {});
       bar.classList.remove('show');
       showToast('Send failed: ' + err.message, true);
-    });
+    }
   };
   reader.onerror = () => { bar.classList.remove('show'); showToast('Could not read file', true); };
   reader.readAsDataURL(file);
 }
 
+// On join: delete any file pieces whose message is missing (e.g. upload interrupted by closing the tab)
+function sweepOrphanFiles() {
+  const room = db.ref('rooms/' + roomPin);
+  room.child('fileIndex').once('value').then(snap => {
+    const keys = Object.keys(snap.val() || {});
+    keys.forEach(k => {
+      room.child('messages/' + k + '/type').once('value').then(m => {
+        if (m.exists()) return;
+        // Give an in-progress upload (maybe from another PC) 10 minutes before treating it as abandoned
+        const pushTime = decodePushTime(k);
+        if (pushTime && Date.now() - pushTime < 10 * 60 * 1000) return;
+        const clean = {};
+        clean['files/' + k] = null; clean['fileIndex/' + k] = null;
+        room.update(clean).catch(() => {});
+      });
+    });
+  }).catch(() => {});
+}
+
+// Firebase push keys start with an 8-char timestamp
+function decodePushTime(key) {
+  const CH = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+  let t = 0;
+  for (let i = 0; i < 8; i++) { const v = CH.indexOf(key.charAt(i)); if (v < 0) return 0; t = t * 64 + v; }
+  return t;
+}
+
 function downloadFile(key, fileName, btn) {
   const old = btn.textContent; btn.textContent = '…'; btn.disabled = true;
-  db.ref('rooms/' + roomPin + '/files/' + key + '/data').once('value').then(snap => {
-    const dataUrl = snap.val();
-    if (!dataUrl) { showToast('File no longer on server', true); return; }
-    const [head, b64] = dataUrl.split(',');
-    const mime = (/data:([^;]+)/.exec(head) || [])[1] || 'application/octet-stream';
+  db.ref('rooms/' + roomPin + '/files/' + key).once('value').then(snap => {
+    const f = snap.val();
+    let mime, b64;
+    if (f && f.c) {                       // new format: pieces
+      mime = f.mime || 'application/octet-stream';
+      const parts = Array.isArray(f.c) ? f.c : Object.keys(f.c).sort((a, b) => a - b).map(i => f.c[i]);
+      b64 = parts.join('');
+    } else if (f && f.data) {             // older format: one piece
+      const comma = f.data.indexOf(',');
+      mime = (/data:([^;]+)/.exec(f.data.slice(0, comma)) || [])[1] || 'application/octet-stream';
+      b64 = f.data.slice(comma + 1);
+    } else { showToast('File no longer on server', true); return; }
     const bin = atob(b64); const arr = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     const url = URL.createObjectURL(new Blob([arr], { type: mime }));
@@ -1151,6 +1207,7 @@ function deleteMsg(key) {
   const updates = {};
   updates['messages/' + key] = null;
   updates['files/' + key]    = null;
+  updates['fileIndex/' + key] = null;
   db.ref('rooms/' + roomPin).update(updates)
     .catch(err => showToast('Delete failed: ' + err.message, true));
 }
